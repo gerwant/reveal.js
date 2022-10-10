@@ -273,6 +273,19 @@ gulp.task('qunit', () => {
     } );
 } )
 
+gulp.task('hbs', () => {
+    return gulp.src('src/index.hbs')
+        .pipe(handlebars({
+            title: config.projectName,
+            author: config.author
+        }, {
+            ignorePartials: true,
+            batch: './src/slides'
+        }))
+        .pipe(rename('index.html'))
+        .pipe(gulp.dest('./dist'))
+})
+
 gulp.task('eslint', () => gulp.src(['./js/**', 'gulpfile.js'])
         .pipe(eslint())
         .pipe(eslint.format()))
@@ -296,19 +309,6 @@ gulp.task('package', gulp.series(() =>
     .pipe(zip(`${config.outputName}-${new Date().valueOf()}.zip`)).pipe(gulp.dest('./build'))
 
 ))
-
-gulp.task('hbs', () => {
-    return gulp.src('src/index.hbs')
-        .pipe(handlebars({
-            title: config.projectName,
-            author: config.author
-        }, {
-            ignorePartials: true,
-            batch: './src/slides'
-        }))
-        .pipe(rename('index.html'))
-        .pipe(gulp.dest('./dist'))
-})
 
 gulp.task('reload', () => gulp.src(['*.html', '*.md', "src/*.hbs"])
     .pipe(connect.reload()));
