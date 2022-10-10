@@ -22,9 +22,15 @@ const minify = require('gulp-clean-css')
 const connect = require('gulp-connect')
 const autoprefixer = require('gulp-autoprefixer')
 
-const root = yargs.argv.root || '.'
+const handlebars = require('gulp-compile-handlebars')
+const rename = require('gulp-rename')
+const styles = require('rollup-plugin-styles')
+
+const config = require('./config')
+
+const root = yargs.argv.root || './dist'
 const port = yargs.argv.port || 8000
-const host = yargs.argv.host || 'localhost'
+const host = yargs.argv.host || '0.0.0.0'
 
 const banner = `/*!
 * reveal.js ${pkg.version}
@@ -121,12 +127,12 @@ gulp.task('js', gulp.parallel('js-es5', 'js-es6'));
 // built-in plugins
 gulp.task('plugins', () => {
     return Promise.all([
-        { name: 'RevealHighlight', input: './plugin/highlight/plugin.js', output: './plugin/highlight/highlight' },
-        { name: 'RevealMarkdown', input: './plugin/markdown/plugin.js', output: './plugin/markdown/markdown' },
-        { name: 'RevealSearch', input: './plugin/search/plugin.js', output: './plugin/search/search' },
-        { name: 'RevealNotes', input: './plugin/notes/plugin.js', output: './plugin/notes/notes' },
-        { name: 'RevealZoom', input: './plugin/zoom/plugin.js', output: './plugin/zoom/zoom' },
-        { name: 'RevealMath', input: './plugin/math/plugin.js', output: './plugin/math/math' },
+        { name: 'RevealHighlight', input: './plugin/highlight/plugin.js', output: './dist/plugin/highlight/highlight' },
+        { name: 'RevealMarkdown', input: './plugin/markdown/plugin.js', output: './dist/plugin/markdown/markdown' },
+        { name: 'RevealSearch', input: './plugin/search/plugin.js', output: './dist/plugin/search/search' },
+        { name: 'RevealNotes', input: './plugin/notes/plugin.js', output: './dist/plugin/notes/notes' },
+        { name: 'RevealZoom', input: './plugin/zoom/plugin.js', output: './dist/plugin/zoom/zoom' },
+        { name: 'RevealMath', input: './plugin/math/plugin.js', output: './dist/plugin/math/math' },
     ].map( plugin => {
         return rollup({
                 cache: cache[plugin.input],
@@ -155,6 +161,14 @@ gulp.task('plugins', () => {
                 })
             });
     } ));
+})
+
+gulp.task('plugin-css', () => {
+    return Promise.all([
+        "highlight"
+    ].map((plugin) => {
+        gulp.src([`./plugin/${plugin}/*.css`]).pipe(gulp.dest(`./dist/plugin/${plugin}`))
+    }))
 })
 
 // a custom pipeable step to transform Sass to CSS
@@ -265,28 +279,38 @@ gulp.task('eslint', () => gulp.src(['./js/**', 'gulpfile.js'])
 
 gulp.task('test', gulp.series( 'eslint', 'qunit' ))
 
-gulp.task('default', gulp.series(gulp.parallel('js', 'css', 'plugins'), 'test'))
+gulp.task('default', gulp.series(gulp.parallel('hbs', 'js', 'css', 'plugins'), 'test'))
 
-gulp.task('build', gulp.parallel('js', 'css', 'plugins'))
+gulp.task('build', gulp.parallel('hbs', 'js', 'css', 'plugins'))
 
 gulp.task('package', gulp.series(() =>
 
     gulp.src(
         [
-            './index.html',
             './dist/**',
             './lib/**',
             './images/**',
-            './plugin/**',
-            './**.md'
         ],
-        { base: './' }
+        // { base: './' }
     )
-    .pipe(zip('reveal-js-presentation.zip')).pipe(gulp.dest('./'))
+    .pipe(zip(`${config.outputName}-${new Date().valueOf()}.zip`)).pipe(gulp.dest('./build'))
 
 ))
 
-gulp.task('reload', () => gulp.src(['*.html', '*.md'])
+gulp.task('hbs', () => {
+    return gulp.src('src/index.hbs')
+        .pipe(handlebars({
+            title: config.projectName,
+            author: config.author
+        }, {
+            ignorePartials: true,
+            batch: './src/slides'
+        }))
+        .pipe(rename('index.html'))
+        .pipe(gulp.dest('./dist'))
+})
+
+gulp.task('reload', () => gulp.src(['*.html', '*.md', "src/*.hbs"])
     .pipe(connect.reload()));
 
 gulp.task('serve', () => {
@@ -298,11 +322,12 @@ gulp.task('serve', () => {
         livereload: true
     })
 
-    gulp.watch(['*.html', '*.md'], gulp.series('reload'))
+    gulp.watch(['*.md', "src/*.hbs", "src/slides/*.hbs"], gulp.series('hbs', 'reload'))
 
     gulp.watch(['js/**'], gulp.series('js', 'reload', 'eslint'))
 
     gulp.watch(['plugin/**/plugin.js', 'plugin/**/*.html'], gulp.series('plugins', 'reload'))
+    gulp.watch(['plugin/**/*.css'], gulp.series('plugin-css'))
 
     gulp.watch([
         'css/theme/source/*.{sass,scss}',
